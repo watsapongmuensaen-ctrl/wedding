@@ -403,36 +403,50 @@
 
         // --- ระบบใหม่: ดึงข้อมูลสรุปรวมจาก Google Sheets แบบ Real-time ---
         async function fetchDashboardData() {
-            const loadingState = document.getElementById('loadingState');
             const refreshBtn = document.getElementById('refreshBtn');
             
-            loadingState.classList.remove('hidden'); // แสดงหน้าโหลด
-            if (refreshBtn) refreshBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> กำลังโหลด...';
+            // แสดงสถานะกำลังโหลด
+            if (refreshBtn) refreshBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> กำลังอัปเดต...';
             
             try {
                 const isTestMode = testModeToggle.checked;
-                if (isTestMode) throw new Error('OfflineMode'); // ถ้าโหมดเทส ให้ข้ามไปใช้ในเครื่อง
+                if (isTestMode) throw new Error('OfflineMode'); 
                 
-                const activeUrl = customUrlInput.value.trim() !== '' ? customUrlInput.value.trim() : GOOGLE_SCRIPT_URL;
-                // ยิงไปขอข้อมูล (action=getData)
-                const response = await fetch(activeUrl + '?action=getData'); 
-                const result = await response.json();
+                let activeUrl = customUrlInput.value.trim() !== '' ? customUrlInput.value.trim() : GOOGLE_SCRIPT_URL;
                 
-                if (result.result === 'success') {
-                    renderDashboardUI(result.data); // เรนเดอร์ข้อมูลที่ได้จาก Google Sheets
-                } else {
-                    throw new Error(result.message || 'ดึงข้อมูลไม่สำเร็จ');
+                // 🔴 ไม้ตายแก้ปัญหามือถือจำค่าเดิม: เติมเวลาปัจจบันต่อท้าย URL เพื่อบังคับให้ดึงข้อมูลใหม่ทุกครั้ง
+                const noCacheUrl = `${activeUrl}?action=getData&t=${new Date().getTime()}`;
+                
+                const response = await fetch(noCacheUrl);
+                const textResponse = await response.text(); // อ่านเป็น Text ก่อนเพื่อเช็ค Error แฝง
+                
+                try {
+                    const result = JSON.parse(textResponse);
+                    
+                    if (result.result === 'success') {
+                        renderDashboardUI(result.data); // อัปเดตตารางด้วยข้อมูลจากออนไลน์
+                        // สำรองข้อมูลลงเครื่องเผื่อเปิดดูตอนเน็ตหลุด
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(result.data));
+                    } else {
+                        throw new Error(result.message || 'ดึงข้อมูลไม่สำเร็จ');
+                    }
+                } catch(e) {
+                    // ถ้าแปลง JSON ไม่ได้ แสดงว่าฝั่ง Google Sheet โค้ดยังเป็นเวอร์ชันเก่า (ไม่ได้กด New Version)
+                    console.error("Text Received:", textResponse);
+                    throw new Error('กรุณากลับไปที่ Google Script แล้วกด Deploy -> เวอร์ชันใหม่');
                 }
+                
             } catch (error) {
                 console.error('Fetch Dashboard Error:', error);
-                // ระบบสำรอง (Fallback): ถ้าเน็ตมีปัญหา ดึงข้อมูลที่เก็บไว้ในเครื่องมาแสดงแทน
+                
+                // ดึงข้อมูลสำรองในเครื่องมาโชว์ไปก่อน
                 const localData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
                 renderDashboardUI(localData);
+                
                 if (error.message !== 'OfflineMode') {
-                    showToast('เชื่อมต่อระบบไม่ได้ กำลังแสดงข้อมูลสำรองในเครื่องนี้', 'error');
+                    showToast(`ดึงยอดล้มเหลว: ${error.message}`, 'error');
                 }
             } finally {
-                loadingState.classList.add('hidden'); // ปิดหน้าโหลด
                 if (refreshBtn) refreshBtn.innerHTML = '<i class="fa-solid fa-rotate"></i> ดึงข้อมูลล่าสุด';
             }
         }
