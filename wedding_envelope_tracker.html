@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>บันทึกซองงานแต่ง (Wedding Envelope Tracker)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Kanit', sans-serif;
+            background-color: #fdf2f8; /* ฉากหลังสีชมพูอ่อน */
+            background-image: radial-gradient(#fbcfe8 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+        }
+        /* Custom Scrollbar for notes */
+        textarea::-webkit-scrollbar { width: 6px; }
+        textarea::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        textarea::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+        
+        /* Toast Animation */
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+        .toast-enter { animation: slideIn 0.3s ease-out forwards; }
+        .toast-exit { animation: fadeOut 0.3s ease-out forwards; }
+    </style>
+</head>
+<body class="text-gray-800 min-h-screen flex flex-col items-center py-6 px-4 sm:px-6 lg:px-8">
+
+    <!-- Header -->
+    <div class="text-center mb-6 w-full max-w-lg relative">
+        <button onclick="toggleDashboard()" class="absolute top-0 right-0 bg-white/80 hover:bg-white text-rose-600 px-3 py-2 rounded-xl shadow-sm border border-rose-100 text-sm font-medium transition-all flex items-center gap-2">
+            <i class="fa-solid fa-chart-pie"></i> สรุปยอด
+        </button>
+        <h1 class="text-3xl font-semibold text-rose-800 mb-2 flex items-center justify-center gap-2 mt-8 sm:mt-0">
+            <i class="fa-solid fa-envelope-open-text"></i> บันทึกซองงานแต่ง
+        </h1>
+        <p class="text-gray-500 text-sm">ระบบลงทะเบียนหน้างาน เชื่อมต่อ Google Sheets</p>
+    </div>
+
+    <!-- Main Form Container -->
+    <div class="w-full max-w-lg glass-panel rounded-2xl p-6 sm:p-8 relative">
+        
+        <!-- Setting/Setup Button -->
+        <button onclick="toggleSetupModal()" class="absolute top-4 right-4 text-gray-400 hover:text-rose-600 transition-colors" title="วิธีเชื่อมต่อ Google Sheets">
+            <i class="fa-solid fa-cog text-xl"></i>
+        </button>
+
+        <form id="envelopeForm" class="space-y-5">
+            <!-- 1. ชื่อ-นามสกุล -->
+            <div>
+                <label for="guestName" class="block text-sm font-medium text-gray-700 mb-1">ชื่อ-นามสกุล หน้าซอง <span class="text-rose-500">*</span></label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fa-solid fa-user text-gray-400"></i>
+                    </div>
+                    <input type="text" id="guestName" required autocomplete="off"
+                        class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:ring-rose-500 focus:border-rose-500 text-lg transition-colors"
+                        placeholder="กรอกชื่อแขก...">
+                </div>
+            </div>
+
+            <!-- 2. จำนวนเงิน -->
+            <div>
+                <label for="amount" class="block text-sm font-medium text-gray-700 mb-1">จำนวนเงิน (บาท) <span class="text-rose-500">*</span></label>
+                <div class="relative mb-2">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fa-solid fa-baht-sign text-gray-400"></i>
+                    </div>
+                    <input type="number" id="amount" required min="0" step="1"
+                        class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:ring-rose-500 focus:border-rose-500 text-xl font-semibold text-rose-700 transition-colors"
+                        placeholder="0">
+                </div>
+                <!-- Quick Amount Buttons -->
+                <div class="grid grid-cols-5 gap-2 mt-2">
+                    <button type="button" onclick="setAmount(500)" class="quick-btn py-2 text-sm font-medium rounded-lg border border-gray-200 bg-gray-50 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 transition">500</button>
+                    <button type="button" onclick="setAmount(1000)" class="quick-btn py-2 text-sm font-medium rounded-lg border border-gray-200 bg-gray-50 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 transition">1,000</button>
+                    <button type="button" onclick="setAmount(2000)" class="quick-btn py-2 text-sm font-medium rounded-lg border border-gray-200 bg-gray-50 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 transition">2,000</button>
+                    <button type="button" onclick="setAmount(3000)" class="quick-btn py-2 text-sm font-medium rounded-lg border border-gray-200 bg-gray-50 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 transition">3,000</button>
+                    <button type="button" onclick="setAmount(5000)" class="quick-btn py-2 text-sm font-medium rounded-lg border border-gray-200 bg-gray-50 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 transition">5,000</button>
+                </div>
+            </div>
+
+            <!-- 3. ประเภท (เงินสด/โอน) -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">ประเภทการรับเงิน</label>
+                <div class="flex gap-4">
+                    <label class="flex-1 cursor-pointer">
+                        <input type="radio" name="giftType" value="เงินสด" class="peer sr-only" checked>
+                        <div class="text-center py-3 rounded-xl border border-gray-200 bg-white peer-checked:bg-rose-50 peer-checked:border-rose-500 peer-checked:text-rose-700 transition-all">
+                            <i class="fa-solid fa-money-bill-wave mr-1"></i> เงินสด
+                        </div>
+                    </label>
+                    <label class="flex-1 cursor-pointer">
+                        <input type="radio" name="giftType" value="โอนเงิน/QR" class="peer sr-only">
+                        <div class="text-center py-3 rounded-xl border border-gray-200 bg-white peer-checked:bg-rose-50 peer-checked:border-rose-500 peer-checked:text-rose-700 transition-all">
+                            <i class="fa-solid fa-qrcode mr-1"></i> โอนเงิน
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 3.5 ฝ่าย (เจ้าบ่าว/เจ้าสาว) -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">แขกฝ่าย <span class="text-rose-500">*</span></label>
+                <div class="flex gap-2 sm:gap-4">
+                    <label class="flex-1 cursor-pointer">
+                        <input type="radio" name="side" value="เจ้าบ่าว" class="peer sr-only">
+                        <div class="text-center py-2 sm:py-3 rounded-xl border border-gray-200 bg-white peer-checked:bg-blue-50 peer-checked:border-blue-500 peer-checked:text-blue-700 transition-all text-sm sm:text-base">
+                            <i class="fa-solid fa-mars mr-1"></i> เจ้าบ่าว
+                        </div>
+                    </label>
+                    <label class="flex-1 cursor-pointer">
+                        <input type="radio" name="side" value="เจ้าสาว" class="peer sr-only">
+                        <div class="text-center py-2 sm:py-3 rounded-xl border border-gray-200 bg-white peer-checked:bg-pink-50 peer-checked:border-pink-500 peer-checked:text-pink-700 transition-all text-sm sm:text-base">
+                            <i class="fa-solid fa-venus mr-1"></i> เจ้าสาว
+                        </div>
+                    </label>
+                    <label class="flex-1 cursor-pointer">
+                        <input type="radio" name="side" value="ทั้งคู่" class="peer sr-only" checked>
+                        <div class="text-center py-2 sm:py-3 rounded-xl border border-gray-200 bg-white peer-checked:bg-purple-50 peer-checked:border-purple-500 peer-checked:text-purple-700 transition-all text-sm sm:text-base">
+                            <i class="fa-solid fa-people-group mr-1"></i> ทั้งคู่
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 4. หมายเหตุ -->
+            <div>
+                <label for="note" class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ (ถ้ามี)</label>
+                <textarea id="note" rows="2" 
+                    class="block w-full p-3 border border-gray-300 rounded-xl focus:ring-rose-500 focus:border-rose-500 text-sm transition-colors"
+                    placeholder="เช่น มา 2 คน, ฝากซองมา..."></textarea>
+            </div>
+
+            <!-- 5. ปุ่มดำเนินการ -->
+            <div class="pt-2 flex gap-3">
+                <button type="button" onclick="resetForm()" class="px-5 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition-colors">
+                    ล้างข้อมูล
+                </button>
+                <button type="submit" id="submitBtn" class="flex-1 bg-rose-600 hover:bg-rose-700 text-white py-3 px-4 rounded-xl font-medium text-lg shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-save"></i> บันทึกข้อมูลซอง
+                </button>
+            </div>
+            
+            <!-- Development Mode Toggle (For testing) -->
+            <div class="flex items-center justify-between mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <span class="text-xs text-gray-500"><i class="fa-solid fa-flask text-rose-400"></i> ทดสอบระบบโดยไม่ส่งเข้า Sheets</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="testMode" class="sr-only peer" checked>
+                    <div class="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
+                </label>
+            </div>
+
+        </form>
+    </div>
+
+    <!-- Setup Modal for Google Sheets -->
+    <div id="setupModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden z-50 flex items-center justify-center p-4 backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                <h3 class="text-xl font-bold text-gray-800"><i class="fa-brands fa-google text-blue-500"></i> วิธีเชื่อมต่อ Google Sheets</h3>
+                <button onclick="toggleSetupModal()" class="text-gray-400 hover:text-gray-700"><i class="fa-solid fa-times text-xl"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1 text-sm text-gray-700 space-y-4">
+                <p>ในการบันทึกข้อมูลลง <b>Google Sheets</b> ให้ทำตามขั้นตอนต่อไปนี้:</p>
+                <ol class="list-decimal pl-5 space-y-2">
+                    <li>ไปที่ <a href="https://script.google.com/" target="_blank" class="text-blue-500 underline">Google Apps Script</a> แล้วกดสร้าง <b>"โครงการใหม่ (New Project)"</b></li>
+                    <li>ตั้งชื่อโปรเจกต์ตามต้องการ เช่น "API บันทึกซองงานแต่ง"</li>
+                    <li>คัดลอกโค้ดด้านล่างนี้ ไปวางทับโค้ดเดิมทั้งหมดในหน้า Script:</li>
+                </ol>
+                
+                <div class="relative">
+                    <pre class="bg-gray-800 text-green-400 p-4 rounded-lg overflow-x-auto text-xs font-mono" id="gasCode">
+function doPost(e) {
+  try {
+    // กำหนดรหัส Sheet ID ของคุณ และชื่อ Sheet ที่ต้องการบันทึก
+    const sheetId = '1hPg0KA4MeoYqUiewRCLimQH7f7pFh7ijGf_m3BLsYWA';
+    const sheetName = 'Data';
+    
+    // เปิดไฟล์ Google Sheet ตาม ID ที่ระบุ
+    const ss = SpreadsheetApp.openById(sheetId);
+    let sheet = ss.getSheetByName(sheetName);
+    
+    // ถ้าย้งไม่มี Sheet ชื่อ Data ให้สร้างใหม่และใส่หัวตาราง
+    if (!sheet) {
+      sheet = ss.insertSheet(sheetName);
+      sheet.appendRow(['Timestamp', 'ชื่อ-นามสกุล', 'จำนวนเงิน', 'ประเภท', 'ฝ่าย', 'หมายเหตุ']);
+      // ไม่ต้อง return ออก ให้ทำงานรับข้อมูลต่อเลย
+    }
+
+    // รับข้อมูลที่ส่งมาจากฟอร์มเว็บ
+    const timestamp = new Date();
+    const name = e.parameter.name || '';
+    const amount = e.parameter.amount || 0;
+    const type = e.parameter.type || '';
+    const side = e.parameter.side || '';
+    const note = e.parameter.note || '';
+
+    // เพิ่มข้อมูลลงแถวใหม่
+    sheet.appendRow([timestamp, name, amount, type, side, note]);
+
+    // ตอบกลับหน้าเว็บว่าสำเร็จ
+    return ContentService.createTextOutput(JSON.stringify({result: 'success'}))
+      .setMimeType(ContentService.MimeType.JSON);
+      
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({result: 'error', error: error.toString()}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}</pre>
+                    <button onclick="copyCode()" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-xs transition">
+                        <i class="fa-solid fa-copy"></i> คัดลอก
+                    </button>
+                </div>
+                
+                <ol class="list-decimal pl-5 space-y-2" start="4">
+                    <li>คลิกปุ่ม <b>ทำให้ใช้งานได้ (Deploy)</b> มุมขวาบน > <b>การทำให้ใช้งานได้รายการใหม่ (New deployment)</b></li>
+                </ol>
+
+                <div class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <label class="block font-medium text-gray-700 mb-1">ใส่ Web App URL ของคุณที่นี่ (สำหรับทดสอบหน้าเว็บนี้):</label>
+                    <input type="text" id="customScriptUrl" class="w-full p-2 border border-gray-300 rounded focus:ring-rose-500 text-sm" placeholder="https://script.google.com/macros/s/......./exec">
+                    <p class="text-xs text-gray-500 mt-1">* หากคุณนำโค้ดเว็บนี้ไปรันในเซิร์ฟเวอร์ของตัวเอง ให้แก้ตัวแปรในโค้ด JS โดยตรง</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard/Summary Modal -->
+    <div id="dashboardModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden z-50 flex items-center justify-center p-4 backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-rose-50">
+                <h3 class="text-xl font-bold text-rose-800"><i class="fa-solid fa-chart-pie mr-2"></i> สรุปยอดเงินใส่ซอง</h3>
+                <button onclick="toggleDashboard()" class="text-gray-400 hover:text-rose-600"><i class="fa-solid fa-times text-xl"></i></button>
+            </div>
+            
+            <div class="p-4 sm:p-6 overflow-y-auto flex-1 bg-gray-50">
+                <!-- Summary Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center">
+                        <span class="text-gray-500 text-sm font-medium mb-1">ยอดรวมทั้งหมด</span>
+                        <span class="text-3xl font-bold text-rose-600" id="totalAmount">0</span>
+                        <span class="text-xs text-gray-400 mt-1" id="totalCount">0 ซอง</span>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-blue-100 flex flex-col items-center justify-center">
+                        <span class="text-gray-500 text-sm font-medium mb-1"><i class="fa-solid fa-mars text-blue-400"></i> ฝ่ายเจ้าบ่าว</span>
+                        <span class="text-2xl font-bold text-blue-600" id="groomAmount">0</span>
+                        <span class="text-xs text-gray-400 mt-1" id="groomCount">0 ซอง</span>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-pink-100 flex flex-col items-center justify-center">
+                        <span class="text-gray-500 text-sm font-medium mb-1"><i class="fa-solid fa-venus text-pink-400"></i> ฝ่ายเจ้าสาว</span>
+                        <span class="text-2xl font-bold text-pink-600" id="brideAmount">0</span>
+                        <span class="text-xs text-gray-400 mt-1" id="brideCount">0 ซอง</span>
+                    </div>
+                </div>
+
+                <!-- Action Bar -->
+                <div class="flex justify-between items-center mb-4">
+                    <h4 class="font-semibold text-gray-700">รายชื่อแขกที่บันทึกล่าสุด</h4>
+                    <button onclick="clearLocalData()" class="text-xs text-red-500 hover:text-red-700 border border-red-200 hover:bg-red-50 px-3 py-1 rounded-lg transition-colors">
+                        <i class="fa-solid fa-trash-alt"></i> ล้างข้อมูลในเครื่อง
+                    </button>
+                </div>
+
+                <!-- Table -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm whitespace-nowrap">
+                            <thead class="bg-gray-100 text-gray-600">
+                                <tr>
+                                    <th class="px-4 py-3 font-medium">เวลา</th>
+                                    <th class="px-4 py-3 font-medium">ชื่อ-นามสกุล</th>
+                                    <th class="px-4 py-3 font-medium text-right">จำนวนเงิน</th>
+                                    <th class="px-4 py-3 font-medium text-center">ประเภท</th>
+                                    <th class="px-4 py-3 font-medium text-center">ฝ่าย</th>
+                                </tr>
+                            </thead>
+                            <tbody id="guestListTable" class="divide-y divide-gray-100">
+                                <!-- Data will be injected here -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="emptyState" class="hidden p-8 text-center text-gray-400">
+                        <i class="fa-solid fa-folder-open text-4xl mb-3 text-gray-300"></i>
+                        <p>ยังไม่มีข้อมูลการบันทึกซองในเครื่องนี้</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 flex flex-col gap-2 z-50"></div>
+
+    <script>
+        // ==========================================
+        // ตั้งค่า URL ของ Google Apps Script ของคุณที่นี่
+        // ==========================================
+        let GOOGLE_SCRIPT_URL = 'YOUR_GOOGLE_SCRIPT_WEB_APP_URL_HERE';
+
+        const form = document.getElementById('envelopeForm');
+        const nameInput = document.getElementById('guestName');
+        const amountInput = document.getElementById('amount');
+        const submitBtn = document.getElementById('submitBtn');
+        const testModeToggle = document.getElementById('testMode');
+        const customUrlInput = document.getElementById('customScriptUrl');
+
+        // Local Storage Key สำหรับเก็บข้อมูลสรุปยอด
+        const STORAGE_KEY = 'wedding_envelopes_data';
+
+        // ฟังก์ชันเมื่อกดปุ่มคีย์ลัดจำนวนเงิน
+        function setAmount(val) {
+            amountInput.value = val;
+            // ขยับ cursor ไปรอที่ปุ่มบันทึก หรือหมายเหตุ
+            document.getElementById('note').focus();
+        }
+
+        // ฟังก์ชันล้างฟอร์มและกลับไปโฟกัสที่ช่องชื่อ
+        function resetForm() {
+            form.reset();
+            // ตั้งค่า default กลับเป็นเงินสด และ ฝ่ายทั้งคู่
+            document.querySelector('input[name="giftType"][value="เงินสด"]').checked = true;
+            document.querySelector('input[name="side"][value="ทั้งคู่"]').checked = true;
+            nameInput.focus();
+        }
+
+        // ระบบแจ้งเตือน (Toast) แทนการใช้ alert()
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            const icon = type === 'success' ? '<i class="fa-solid fa-circle-check text-green-500 text-xl"></i>' : '<i class="fa-solid fa-circle-xmark text-red-500 text-xl"></i>';
+            const bgColor = type === 'success' ? 'bg-white' : 'bg-red-50';
+            const border = type === 'success' ? 'border-green-100' : 'border-red-200';
+            
+            toast.className = `flex items-center gap-3 p-4 rounded-xl shadow-lg border ${border} ${bgColor} toast-enter min-w-[300px]`;
+            toast.innerHTML = `
+                ${icon}
+                <span class="text-gray-800 font-medium">${message}</span>
+            `;
+            
+            const container = document.getElementById('toastContainer');
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('toast-enter');
+                toast.classList.add('toast-exit');
+                setTimeout(() => toast.remove(), 300); // Wait for animation
+            }, 3000);
+        }
+
+        // จัดการเมื่อกดส่งฟอร์ม
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const guestName = nameInput.value.trim();
+            const amount = amountInput.value;
+            const giftType = document.querySelector('input[name="giftType"]:checked').value;
+            const side = document.querySelector('input[name="side"]:checked').value;
+            const note = document.getElementById('note').value.trim();
+
+            if(!guestName || !amount) {
+                showToast('กรุณากรอกข้อมูลให้ครบถ้วน', 'error');
+                return;
+            }
+
+            // เตรียมข้อมูลสำหรับบันทึกลงเครื่องเพื่อแสดงในสรุปยอด
+            const localData = {
+                id: Date.now(),
+                timestamp: new Date().toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}),
+                name: guestName,
+                amount: parseFloat(amount),
+                type: giftType,
+                side: side,
+                note: note
+            };
+
+            // UI Loading State
+            const originalBtnText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก...';
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-75', 'cursor-not-allowed');
+
+            const isTestMode = testModeToggle.checked;
+            const activeUrl = customUrlInput.value.trim() !== '' ? customUrlInput.value.trim() : GOOGLE_SCRIPT_URL;
+
+            try {
+                if (isTestMode) {
+                    // โหมดจำลอง ไม่ส่งข้อมูลจริง
+                    await new Promise(resolve => setTimeout(resolve, 800)); // จำลองเวลาโหลด
+                    saveToLocalStorage(localData); // บันทึกลงเครื่อง
+                    console.log('Mock Data Saved:', localData);
+                    showToast(`จำลองบันทึกซอง: ${guestName} (${amount} บ.) สำเร็จ`);
+                    resetForm();
+                } else {
+                    // โหมดส่งข้อมูลจริงไปยัง Google Sheets
+                    if (activeUrl === 'YOUR_GOOGLE_SCRIPT_WEB_APP_URL_HERE' || !activeUrl.startsWith('http')) {
+                        throw new Error('กรุณาตั้งค่า Google Script URL ก่อนใช้งานจริง');
+                    }
+
+                    // สร้างข้อมูลแบบ Form Data เพื่อง่ายต่อการรับใน GAS
+                    const formData = new URLSearchParams();
+                    formData.append('name', guestName);
+                    formData.append('amount', amount);
+                    formData.append('type', giftType);
+                    formData.append('side', side);
+                    formData.append('note', note);
+
+                    // ใช้ POST ส่งข้อมูล
+                    const response = await fetch(activeUrl, {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                    });
+
+                    // ในกรณีที่ GAS ส่งคืนกลับมาเป็น JSON ได้
+                    const result = await response.json();
+                    
+                    if(result.result === 'success') {
+                        saveToLocalStorage(localData); // บันทึกลงเครื่องเมื่อส่งสำเร็จ
+                        showToast(`บันทึกซองของ ${guestName} สำเร็จ`);
+                        resetForm();
+                    } else {
+                        throw new Error(result.error || 'เกิดข้อผิดพลาดในการบันทึก');
+                    }
+                }
+            } catch (error) {
+                console.error('Save Error:', error);
+                showToast(error.message === 'Failed to fetch' ? 'อาจบันทึกสำเร็จแต่เกิดปัญหา CORS โปรดเช็คใน Sheet' : error.message, 'error');
+            } finally {
+                // Restore Button State
+                submitBtn.innerHTML = originalBtnText;
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+            }
+        });
+
+        // ------------------------------------------
+        // Dashboard & Local Storage Logic
+        // ------------------------------------------
+        const dashboardModal = document.getElementById('dashboardModal');
+
+        function toggleDashboard() {
+            if (dashboardModal.classList.contains('hidden')) {
+                updateDashboardUI(); // อัปเดตข้อมูลทุกครั้งที่เปิด
+                dashboardModal.classList.remove('hidden');
+            } else {
+                dashboardModal.classList.add('hidden');
+            }
+        }
+
+        // ปิด modal เมื่อคลิกพื้นหลัง
+        dashboardModal.addEventListener('click', (e) => {
+            if(e.target === dashboardModal) toggleDashboard();
+        });
+
+        function saveToLocalStorage(data) {
+            let envelopes = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+            envelopes.unshift(data); // นำข้อมูลล่าสุดไว้บนสุด
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(envelopes));
+        }
+
+        function clearLocalData() {
+            if(confirm('คุณแน่ใจหรือไม่ว่าต้องการล้างข้อมูลสรุปยอดในเครื่องนี้? (ข้อมูลใน Google Sheets ของคุณจะไม่ถูกลบ)')) {
+                localStorage.removeItem(STORAGE_KEY);
+                updateDashboardUI();
+                showToast('ล้างข้อมูลในเครื่องแล้ว');
+            }
+        }
+
+        function updateDashboardUI() {
+            let envelopes = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+            
+            let totalAmount = 0;
+            let groomAmount = 0;
+            let brideAmount = 0;
+            let groomCount = 0;
+            let brideCount = 0;
+
+            const tableBody = document.getElementById('guestListTable');
+            const emptyState = document.getElementById('emptyState');
+            tableBody.innerHTML = '';
+
+            if (envelopes.length === 0) {
+                emptyState.classList.remove('hidden');
+                document.getElementById('totalAmount').innerText = '0';
+                document.getElementById('totalCount').innerText = '0 ซอง';
+                document.getElementById('groomAmount').innerText = '0';
+                document.getElementById('groomCount').innerText = '0 ซอง';
+                document.getElementById('brideAmount').innerText = '0';
+                document.getElementById('brideCount').innerText = '0 ซอง';
+                return;
+            }
+            
+            emptyState.classList.add('hidden');
+            
+            envelopes.forEach(env => {
+                const amount = env.amount || 0;
+                totalAmount += amount;
+                
+                if (env.side === 'เจ้าบ่าว') {
+                    groomAmount += amount;
+                    groomCount++;
+                } else if (env.side === 'เจ้าสาว') {
+                    brideAmount += amount;
+                    brideCount++;
+                }
+
+                // Render Table Row
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 transition-colors";
+                
+                // Badge styles for side
+                let sideBadge = '';
+                if (env.side === 'เจ้าบ่าว') sideBadge = '<span class="bg-blue-100 text-blue-700 px-2 py-1 rounded-md text-xs font-medium">เจ้าบ่าว</span>';
+                else if (env.side === 'เจ้าสาว') sideBadge = '<span class="bg-pink-100 text-pink-700 px-2 py-1 rounded-md text-xs font-medium">เจ้าสาว</span>';
+                else sideBadge = '<span class="bg-purple-100 text-purple-700 px-2 py-1 rounded-md text-xs font-medium">ทั้งคู่</span>';
+
+                tr.innerHTML = `
+                    <td class="px-4 py-3 text-xs text-gray-500">${env.timestamp}</td>
+                    <td class="px-4 py-3 font-medium text-gray-800">${env.name} ${env.note ? `<span class="text-xs text-gray-400 block font-normal mt-0.5"><i class="fa-regular fa-comment-dots"></i> ${env.note}</span>` : ''}</td>
+                    <td class="px-4 py-3 text-right font-semibold text-rose-600">${amount.toLocaleString()}</td>
+                    <td class="px-4 py-3 text-center text-gray-500 text-xs">${env.type}</td>
+                    <td class="px-4 py-3 text-center">${sideBadge}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+
+            // Update Summary Cards
+            document.getElementById('totalAmount').innerText = totalAmount.toLocaleString();
+            document.getElementById('totalCount').innerText = `${envelopes.length} ซอง`;
+            
+            document.getElementById('groomAmount').innerText = groomAmount.toLocaleString();
+            document.getElementById('groomCount').innerText = `${groomCount} ซอง`;
+            
+            document.getElementById('brideAmount').innerText = brideAmount.toLocaleString();
+            document.getElementById('brideCount').innerText = `${brideCount} ซอง`;
+        }
+
+        // ------------------------------------------
+        // Setup Modal Logic
+        // ------------------------------------------
+        const setupModal = document.getElementById('setupModal');
+        
+        function toggleSetupModal() {
+            if (setupModal.classList.contains('hidden')) {
+                setupModal.classList.remove('hidden');
+            } else {
+                setupModal.classList.add('hidden');
+            }
+        }
+
+        // ปิด modal เมื่อคลิกพื้นหลัง
+        setupModal.addEventListener('click', (e) => {
+            if(e.target === setupModal) toggleSetupModal();
+        });
+
+        function copyCode() {
+            const codeText = document.getElementById('gasCode').innerText;
+            const fallbackCopy = () => {
+                const textArea = document.createElement("textarea");
+                textArea.value = codeText;
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showToast('คัดลอกโค้ดแล้ว');
+                } catch (err) {
+                    showToast('ไม่สามารถคัดลอกได้', 'error');
+                }
+                document.body.removeChild(textArea);
+            };
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(codeText).then(() => {
+                    showToast('คัดลอกโค้ดแล้ว');
+                }).catch(fallbackCopy);
+            } else {
+                fallbackCopy();
+            }
+        }
+
+        // ตั้งให้ Auto-focus ช่องชื่อตอนเปิดหน้าเว็บ
+        window.onload = () => {
+            nameInput.focus();
+        };
+
+    </script>
+</body>
+</html>
