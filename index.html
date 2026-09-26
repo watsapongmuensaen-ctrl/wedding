@@ -384,8 +384,8 @@
 
         function toggleDashboard() {
             if (dashboardModal.classList.contains('hidden')) {
-                updateDashboardUI();
                 dashboardModal.classList.remove('hidden');
+                fetchDashboardData(); // ดึงข้อมูลจาก Cloud ทันทีที่เปิดหน้าสรุป
             } else {
                 dashboardModal.classList.add('hidden');
             }
@@ -401,34 +401,44 @@
             localStorage.setItem(STORAGE_KEY, JSON.stringify(envelopes));
         }
 
-        // Custom confirm logic to avoid confirm() dialog
-        let clearConfirmTimeout;
-        function clearLocalData(btn) {
-            if(btn.innerText.includes('แน่ใจ')) {
-                localStorage.removeItem(STORAGE_KEY);
-                updateDashboardUI();
-                showToast('ล้างข้อมูลในเครื่องแล้ว');
-                // Reset button
-                btn.innerHTML = '<i class="fa-solid fa-trash-alt"></i> ล้างข้อมูลในเครื่อง';
-                btn.classList.remove('text-white', 'bg-red-500', 'hover:bg-red-600');
-                btn.classList.add('text-red-500', 'hover:bg-red-50');
-                clearTimeout(clearConfirmTimeout);
-            } else {
-                btn.innerHTML = 'แน่ใจหรือไม่? (คลิกยืนยัน)';
-                btn.classList.remove('text-red-500', 'hover:bg-red-50');
-                btn.classList.add('text-white', 'bg-red-500', 'hover:bg-red-600');
+        // --- ระบบใหม่: ดึงข้อมูลสรุปรวมจาก Google Sheets แบบ Real-time ---
+        async function fetchDashboardData() {
+            const loadingState = document.getElementById('loadingState');
+            const refreshBtn = document.getElementById('refreshBtn');
+            
+            loadingState.classList.remove('hidden'); // แสดงหน้าโหลด
+            if (refreshBtn) refreshBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> กำลังโหลด...';
+            
+            try {
+                const isTestMode = testModeToggle.checked;
+                if (isTestMode) throw new Error('OfflineMode'); // ถ้าโหมดเทส ให้ข้ามไปใช้ในเครื่อง
                 
-                clearConfirmTimeout = setTimeout(() => {
-                    btn.innerHTML = '<i class="fa-solid fa-trash-alt"></i> ล้างข้อมูลในเครื่อง';
-                    btn.classList.remove('text-white', 'bg-red-500', 'hover:bg-red-600');
-                    btn.classList.add('text-red-500', 'hover:bg-red-50');
-                }, 3000);
+                const activeUrl = customUrlInput.value.trim() !== '' ? customUrlInput.value.trim() : GOOGLE_SCRIPT_URL;
+                // ยิงไปขอข้อมูล (action=getData)
+                const response = await fetch(activeUrl + '?action=getData'); 
+                const result = await response.json();
+                
+                if (result.result === 'success') {
+                    renderDashboardUI(result.data); // เรนเดอร์ข้อมูลที่ได้จาก Google Sheets
+                } else {
+                    throw new Error(result.message || 'ดึงข้อมูลไม่สำเร็จ');
+                }
+            } catch (error) {
+                console.error('Fetch Dashboard Error:', error);
+                // ระบบสำรอง (Fallback): ถ้าเน็ตมีปัญหา ดึงข้อมูลที่เก็บไว้ในเครื่องมาแสดงแทน
+                const localData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+                renderDashboardUI(localData);
+                if (error.message !== 'OfflineMode') {
+                    showToast('เชื่อมต่อระบบไม่ได้ กำลังแสดงข้อมูลสำรองในเครื่องนี้', 'error');
+                }
+            } finally {
+                loadingState.classList.add('hidden'); // ปิดหน้าโหลด
+                if (refreshBtn) refreshBtn.innerHTML = '<i class="fa-solid fa-rotate"></i> ดึงข้อมูลล่าสุด';
             }
         }
 
-        function updateDashboardUI() {
-            let envelopes = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-            
+        // --- ฟังก์ชันสร้างตารางรายชื่อ ---
+        function renderDashboardUI(envelopes) {
             let totalAmount = 0, groomAmount = 0, brideAmount = 0;
             let groomCount = 0, brideCount = 0;
 
@@ -436,7 +446,7 @@
             const emptyState = document.getElementById('emptyState');
             tableBody.innerHTML = '';
 
-            if (envelopes.length === 0) {
+            if (!envelopes || envelopes.length === 0) {
                 emptyState.classList.remove('hidden');
                 document.getElementById('totalAmount').innerText = '0';
                 document.getElementById('totalCount').innerText = '0 ซอง';
@@ -450,14 +460,14 @@
             emptyState.classList.add('hidden');
             
             envelopes.forEach(env => {
-                const amount = env.amount || 0;
+                const amount = parseFloat(env.amount) || 0;
                 totalAmount += amount;
                 
                 if (env.side === 'เจ้าบ่าว') { groomAmount += amount; groomCount++; } 
                 else if (env.side === 'เจ้าสาว') { brideAmount += amount; brideCount++; }
 
                 const tr = document.createElement('tr');
-                tr.className = "hover:bg-pink-50/50 transition-colors";
+                tr.className = "hover:bg-amber-50/50 transition-colors";
                 
                 let sideBadge = '';
                 if (env.side === 'เจ้าบ่าว') sideBadge = '<span class="bg-blue-50 text-blue-600 border border-blue-100 px-2.5 py-1 rounded-lg text-xs font-medium">เจ้าบ่าว</span>';
@@ -465,9 +475,9 @@
                 else sideBadge = '<span class="bg-purple-50 text-purple-600 border border-purple-100 px-2.5 py-1 rounded-lg text-xs font-medium">ทั้งคู่</span>';
 
                 tr.innerHTML = `
-                    <td class="px-5 py-4 text-xs text-gray-500">${env.timestamp}</td>
-                    <td class="px-5 py-4 font-medium text-gray-800">${env.name} ${env.note ? `<span class="text-xs text-gray-400 block font-normal mt-1"><i class="fa-regular fa-comment-dots text-pink-300"></i> ${env.note}</span>` : ''}</td>
-                    <td class="px-5 py-4 text-right font-bold text-pink-600">${amount.toLocaleString()}</td>
+                    <td class="px-5 py-4 text-xs text-gray-500">${env.timestamp || '-'}</td>
+                    <td class="px-5 py-4 font-medium text-gray-800">${env.name} ${env.note ? `<span class="text-xs text-gray-400 block font-normal mt-1"><i class="fa-regular fa-comment-dots text-amber-300"></i> ${env.note}</span>` : ''}</td>
+                    <td class="px-5 py-4 text-right font-bold text-amber-600">${amount.toLocaleString()}</td>
                     <td class="px-5 py-4 text-center text-gray-500 text-xs">${env.type}</td>
                     <td class="px-5 py-4 text-center">${sideBadge}</td>
                 `;
